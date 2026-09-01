@@ -1,13 +1,108 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+model User {
+  id              String   @id @default(uuid())
+  name            String
+  email           String   @unique
+  role            Role     @default(CITIZEN)
+  jurisdiction_id String?  // Optional: For officers and local admins
+  created_at      DateTime @default(now())
+
+  // Relations
+  submitted_reports  RawReport[]        @relation("CitizenReports")
+  budget_allocations BudgetAllocation[] @relation("OfficerAllocations")
+}
+
+enum Role {
+  CITIZEN
+  OFFICER
+  ADMIN
+  AUDITOR
+}
+
+model CanonicalReport {
+  id              String   @id @default(uuid())
+  category        Category
+  urgency_score   Float    @default(0.0)
+  report_count    Int      @default(1)
+  status          Status   @default(OPEN)
+  latitude        Float
+  longitude       Float
+  jurisdiction_id String?
+  sdg_tags        String[] // E.g., ["11", "16", "9"]
+  created_at      DateTime @default(now())
+  resolved_at     DateTime?
+
+  // Relations
+  raw_reports        RawReport[]
+  budget_allocations BudgetAllocation[]
+}
+
+enum Category {
+  FLOOD
+  DRAINAGE
+  POTHOLES
+  STREETLIGHTS
+  TREE_PLANTING
+  OTHER
+}
+
+enum Status {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+model RawReport {
+  id                  String   @id @default(uuid())
+  canonical_report_id String
+  citizen_id          String
+  description         String
+  severity_rating     Int      @default(1) // 1-5
+  photo_url           String?
+  latitude            Float
+  longitude           Float
+  submitted_at        DateTime @default(now())
+  is_duplicate        Boolean  @default(false)
+
+  // Relations
+  canonical_report CanonicalReport @relation(fields: [canonical_report_id], references: [id], onDelete: Cascade)
+  citizen          User            @relation("CitizenReports", fields: [citizen_id], references: [id])
+}
+
+model AuditLog {
+  id                String   @id @default(uuid())
+  timestamp         DateTime @default(now())
+  actor_id          String
+  actor_role        String
+  action            String
+  entity_id         String
+  payload_hash      String
+  previous_log_hash String?
+  signature         String
+}
+
+model BudgetAllocation {
+  id                  String   @id @default(uuid())
+  canonical_report_id String
+  officer_id          String
+  amount              Float
+  justification       String
+  allocated_at        DateTime @default(now())
+  audit_log_id        String
+
+  // Relations
+  canonical_report CanonicalReport @relation(fields: [canonical_report_id], references: [id])
+  officer          User            @relation("OfficerAllocations", fields: [officer_id], references: [id])
 }
